@@ -1,0 +1,36 @@
+name: Fix Cobros Header
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove duplicate Cobros header
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          old = '<div class="cobro-head"><div><div class="label">LIQUIDACIÓN DE COBROS</div><div class="value">${weekText()}</div></div><div style="font-size:28px;font-weight:900">▣</div></div>'
+          if old not in s:
+              print('Duplicate header already removed; no change needed.')
+          else:
+              p.write_text(s.replace(old, '', 1), encoding='utf-8')
+              print('Duplicate header removed.')
+          PY
+      - name: Commit change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+          else
+            git commit -m 'Eliminar encabezado duplicado de Cobros'
+            git push
+          fi
