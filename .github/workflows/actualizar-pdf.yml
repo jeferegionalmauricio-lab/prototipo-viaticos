@@ -1,0 +1,27 @@
+name: Actualizar PDF Viáticos
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Aplicar PDF separado por hojas
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          start=s.index('function pdfDoc(tipo){')
+          end=s.index('async function sharePDF', start)
+          new='''function pdfDoc(tipo){\nif(tipo==='cobro'){let arr=cobros;if(!arr.length){alert('No hay datos para generar el PDF.');return null}let{jsPDF}=window.jspdf,doc=new jsPDF('l','mm','a4');pdfHeaderCobro(doc,'LIQUIDACIÓN DE COBROS');let body=arr.map((x,i)=>[i+1,x.cobro,x.nombre_cliente,x.numero_recibo,money(x.efectivo),money(x.cheque_dia),money(x.cheque_mes),money(x.cheque_prefechado),x.banco||'',x.numero_cheque||'',fmtDate(x.fecha_pago)||'',x.transferencia_deposito||'',x.porcentaje_documento_banco||'']);doc.autoTable({startY:46,head:[['No.','CÓDIGO','NOMBRE CLIENTE','# RECIBO','EFECTIVO','CHEQUE AL DÍA','CHEQUE MES','PREF. SIG. MES','BANCO','# CHEQUE','FECHA PAGO','TRANSF./DEP.','% DOC./BANCO']],body,theme:'grid',styles:{fontSize:6},headStyles:{fillColor:[32,38,43],textColor:[243,245,247]}});let vals=[['Efectivo',arr.reduce((a,x)=>a+Number(x.efectivo||0),0)],['Cheque al día',arr.reduce((a,x)=>a+Number(x.cheque_dia||0),0)],['Cheque dentro del mes',arr.reduce((a,x)=>a+Number(x.cheque_mes||0),0)],['Cheque pre-fechado siguiente mes',arr.reduce((a,x)=>a+Number(x.cheque_prefechado||0),0)]];let y=doc.lastAutoTable.finalY+9;doc.setFontSize(9);vals.forEach(v=>{doc.text(`${v[0]}: ${money(v[1])}`,220,y,{align:'right'});y+=5});let total=vals.reduce((a,x)=>a+x[1],0);doc.setFontSize(13);doc.text(`TOTAL GENERAL: ${money(total)}`,220,y+3,{align:'right'});return doc}\nlet viaticos=invoices.filter(x=>x.tipo_registro==='VIATICOS SEMANA'),depreciacion=invoices.filter(x=>x.tipo_registro==='DEPRECIACION');if(!viaticos.length&&!depreciacion.length){alert('No hay datos para generar el PDF.');return null}let{jsPDF}=window.jspdf,doc=new jsPDF('l','mm','a4');function addViaticosPage(arr,title){pdfHeaderViaticos(doc,title);let body=arr.map((x,i)=>[i+1,fmtDate(x.fecha_factura),x.serie,x.numero,x.razon_social,x.concepto,money(x.monto)]);doc.autoTable({startY:46,head:[['No.','Fecha','Serie','Número','Razón Social','Concepto','Monto']],body,theme:'grid',styles:{fontSize:8},headStyles:{fillColor:[32,38,43],textColor:[243,245,247]}});doc.setFontSize(13);doc.text(`TOTAL: ${money(arr.reduce((s,x)=>s+Number(x.monto),0))}`,250,doc.lastAutoTable.finalY+9,{align:'right'})}if(viaticos.length){addViaticosPage(viaticos,'LIQUIDACIÓN DE VIÁTICOS')}if(depreciacion.length){if(viaticos.length)doc.addPage();addViaticosPage(depreciacion,'LIQUIDACIÓN DE DEPRECIACIÓN')}return doc}\n'''
+          p.write_text(s[:start]+new+s[end:],encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || (git commit -m 'Separar Viáticos y Depreciación en hojas PDF' && git push)
